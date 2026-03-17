@@ -1,88 +1,169 @@
-# Astro21-Sim
+Adaptive Differential-Drag Rendezvous Simulation
+Numerical Reproduction of Shao et al. (2021)
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Reference
+Shao, G., Wang, H., Zhou, B. Adaptive controller for differential-drag rendezvous with unknown parameters. Acta Astronautica 2021, 181, 733-740. https://doi.org/10.1016/j.actaastro.2021.01.031
 
-A Python reproduction and simulation scaffold for the adaptive differential-drag spacecraft rendezvous paper: **Acta Astronautica 181 (2021) 733-740**. This project simulates CubeSat rendezvous maneuvers using differential drag in chaotic atmospheric conditions, implementing adaptive control and dynamics modeling based on the original research.
+Overview
+This project is a full Python reproduction of the numerical simulation framework described in the paper above. It models the adaptive differential drag rendezvous maneuvers of satellites in chaotic atmospheric conditions by integrating:
 
-## Features
+Linear and Nonlinear Orbit Models — propagates relative satellite trajectories using Schweighart-Sedwick (SS) dynamics and high-fidelity simulated models with artificial drift injection and J2 disturbance modeling.
+Adaptive Controller — implementation of the adaptive control law estimating differential ballistic coefficients to command optimal maneuvers.
+Atmosphere Models — density models mapping atmospheric flux and chaotic variations (including an exact NRLMSISE-00 wrapper).
+The simulation outputs relative convergence states, continuous control efforts, and dynamic parameter estimations, reproducing the core figures in the paper.
 
-- **High-Fidelity Dynamics Modeling**: Includes orbital mechanics, artificial drift injection, J2 disturbance modeling, and atmospheric co-rotation.
-- **Adaptive Controller**: Implementation of the adaptive differential-drag controller with optimized parameter tuning (Q weights, R, Gamma1, Gamma2).
-- **Interactive GUI**: A built-in Tkinter interface (`astro21_gui.py`) allowing interactive tweaking of orbital, spacecraft, and controller parameters with real-time feedback.
-- **Parametric Studies**: Tools to run comprehensive parametric studies (`parametric_study.py`) for optimization and convergence time analysis.
-- **Paper Regression & Calibration**: Built-in scripts to validate simulation outputs against specific data targets extracted from the original paper.
-
-## Project Structure
-
-- `astro21_sim/`: Core package containing the dynamics, controller, atmosphere wrapper, and plotting utilities.
-- `run_suite.py`: Executes the SS (Schweighart-Sedwick) and full-dynamics reference scenarios, generating figures in the `outputs/` directory.
-- `astro21_gui.py`: Launches the interactive GUI with pre-loaded paper defaults.
-- `parametric_study.py`: Executes parametric studies to visualize and optimize controller convergence under varying atmospheric conditions.
-- `compare_to_paper.py`: Validates simulator accuracy against manual targets extracted from the original paper's figures.
-- `calibrate_to_paper.py`: Performs bounded searches over hidden scenario parameters to minimize mismatch with the paper's results.
-
-## Installation
-
-Ensure you have Python 3.11 or newer installed. You can install the required dependencies using `pip`:
-
+Quick Start
+1. Install dependencies
 ```bash
 pip install -e .
 ```
-
-This will install the package in editable mode along with `numpy`, `scipy`, and `matplotlib`.
-
-## Usage
-
-### 1. Run Standard Simulation Suite
-
-To run the default scenarios and generate plots:
-
+2. Run the full simulation
 ```bash
 python3 run_suite.py
 ```
+All figures are saved as PNG files into the `outputs/` directory.
 
-To mandate the NRLMSISE-00 backend for full-dynamics cases:
+File Structure
+astro21-sim/
+├── astro21_sim/           Core package
+│   ├── constants.py       All physical constants and mission parameters
+│   ├── controller.py      Implementation of the adaptive controller
+│   ├── orbits.py          Orbit dynamics and propagations
+│   ├── atmosphere.py      Atmospheric wrapper for USSA76 and NRLMSISE-00
+│   └── plots.py           Figure generation routines
+├── run_suite.py           Entry point — runs SS and full-dynamics reference scenarios
+├── astro21_gui.py         Interactive GUI to tweak parameters
+├── parametric_study.py    Rendezvous convergence studies and heatmaps
+├── compare_to_paper.py    Regression comparison to paper-derived targets
+├── calibrate_to_paper.py  Calibration of hidden parameters
+├── pyproject.toml         Python packaging and dependencies
+└── README.md              This file
 
+What the Simulation Computes
+At every timestep (default: 60s for SS model, 13s for full model) the simulation:
+
+Advances the relative chaser and target state vectors using specified dynamics models.
+Calculates local atmospheric densities and artificial drift disturbances.
+Executes the controller to optimize relative trajectory convergence.
+Adjusts parameter estimates (Theta1 and Theta2 bounds) for adaptive response.
+Logs continuous relative states, bounds, and control history.
+
+Variables You Can Change
+All user-configurable variables are in `astro21_sim/constants.py` and interactively available via `astro21_gui.py`.
+
+Orbital Parameters (In constants.py under chaser_orbit)
+```python
+chaser_orbit = {
+    'semi_major_axis_m': 6.7131e6, # Semi-major axis (meters)
+    'eccentricity': 0.0,           # Near-circular
+    'inclination_rad': 0.906,      # ~51.94 degrees
+    'raan_rad': 3.601,             # ~206.36 degrees
+    'arg_perigee_rad': 1.764,      # ~101.07 degrees
+    'true_anomaly_rad': 1.886,     # ~108.08 degrees
+}
+```
+
+Spacecraft Geometry
+```python
+drag_coefficient = 2.2      # Standard value in free molecular flow
+chaser_mass_kg = 3.0        # Chaser mass [kg]
+target_mass_kg = 1.5        # Target mass [kg]
+chaser_area_min_m2 = 0.01   # Minimum variable area for the chaser [m^2]
+chaser_area_max_m2 = 0.5    # Maximum variable area [m^2]
+target_area_m2 = 0.2        # Target fixed area [m^2]
+```
+
+Controller Config (Tuning Weights)
+```python
+q_matrix = np.diag([180.0, 1.0, 1.8, 1.0])
+r_scalar = 1.8e16
+gamma1 = 1.0e-21 * np.eye(3)
+gamma2 = 1.5e-21 * np.eye(3)
+```
+
+Simulation Settings
+Set via the defined models in `constants.py`:
+```python
+duration_hours = 60.0    # Simulation duration (hours)
+sample_step_s = 60.0     # Time increment for updates
+```
+
+Atmospheric Model
+Mandate the exact NRLMSISE-00 backend inside `run_suite.py`:
 ```bash
 python3 run_suite.py --require-exact-atmosphere
 ```
 
-### 2. Interactive GUI
-
-Launch the interactive parameter-tuning GUI:
-
-```bash
-python3 astro21_gui.py
-```
-*Note: The GUI exposes all main orbits, spacecraft limits, controller parameters, and atmospheric models.*
-
-### 3. Parametric Studies
-
-To generate heatmaps and analyze convergence optimization:
-
-```bash
-python3 parametric_study.py
+Variables That Must Remain Constant
+Do not manually alter core environment constants:
+```python
+MU = 3.986004418e14        # Earth gravitational parameter
+radius_m = 6378137.0       # Earth mean radius [m]
+j2 = 1.08262668e-3         # Earth oblateness coefficient
+omega_rad_s = 7.2921159e-5 # Earth rotation speed
 ```
 
-### 4. Paper Verification
+Optimal Configuration for Fastest Rendezvous Convergence
+To vastly minimize convergence time, optimization requires higher cost factor values combined with aggressive drag variation mapping.
 
-To check simulator accuracy against the paper's documented results:
-
-```bash
-python3 compare_to_paper.py
-```
-This script outputs a regression report to `outputs/paper_regression_report.txt`.
-
-### 5. Calibration
-
-To calibrate the underlying hidden parameters against the paper:
-
-```bash
-python3 calibrate_to_paper.py --mode ss
-python3 calibrate_to_paper.py --mode full
+```python
+# In constants.py
+controller = ControllerConfig(
+    q_matrix=np.diag([1000.0, 10.0, 10.0, 10.0]),
+    r_scalar=1.0e14,
+    gamma1=5.0e-20 * np.eye(3),
+    # ...
+)
 ```
 
-## References
+Equations Implemented
+The exact equations are coded per their occurrence within the underlying research layout.
 
-- Shao et al., Acta Astronautica 181 (2021) 733-740. (Adaptive differential-drag rendezvous).
+Equation(s) Description Module
+SS models Schweighart-Sedwick linear orbital perturbations `orbits.py`
+NL models Full non-linear dynamics equations `orbits.py`
+Control law Adaptive non-linear control logic `controller.py`
+Estimators Adaptive parameter constraints `controller.py`
+Atmosphere NRLMSISE-00 / USSA76 wrapper algorithms `atmosphere.py`
+Plotting Graphical interpretation mapping `plots.py`
+
+Figures Reproduced
+Figure Description
+Figure 3	Recreation of relative states under SS models
+Figure 4	Recreation of control efforts under SS models
+Figure 5	Recreation of parameter estimates under SS models
+Figure 6	Recreation of relative states under full non-linear models
+Figure 7	Recreation of control efforts under full non-linear models
+Figure 8	Recreation of parameter estimates under full non-linear models
+
+TLE Parameter Reference
+Parameter Symbol Unit Description
+semi_major_axis_m a meters Orbit semi-major axis
+eccentricity e - Orbital eccentricity
+inclination_rad i radians Orbit inclination
+raan_rad Omega radians Right ascension of ascending node
+arg_perigee_rad omega radians Argument of perigee
+true_anomaly_rad theta radians True anomaly
+
+Dependencies
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.8
+
+Notes
+The exact full non-linear simulation suite operates best with the NRLMSISE-00 backend installed.
+The graphical application (`astro21_gui.py`) wraps underlying parameter inputs to bypass raw manipulation when desired.
+All simulation figures export to `outputs/` rather than explicitly projecting standalone graphical windows by default to enable server compatibility.
+
+Citation
+If using this code, please cite the original paper:
+
+@article{shao2021,
+  author  = {Shao, G. and Wang, H. and Zhou, B.},
+  title   = {Adaptive controller for differential-drag rendezvous with unknown parameters},
+  journal = {Acta Astronautica},
+  volume  = {181},
+  pages   = {733--740},
+  year    = {2021},
+  doi     = {10.1016/j.actaastro.2021.01.031} 
+}
